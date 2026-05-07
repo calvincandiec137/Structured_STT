@@ -66,6 +66,73 @@ Open: `http://127.0.0.1:5173`
 3. Click **Stop Recording**
 4. Transcript is parsed and inserted into editor
 
+## Slash Commands Guide
+
+### Line breaks
+
+- `slash new line`, `slash next line`, `slash line break` -> new line
+- `slash double new line`, `slash new paragraph` -> blank line
+
+### Spacing
+
+- `slash indent` -> 4 spaces
+- `slash tab`, `slash new tab` -> tab
+- `slash space` -> space
+
+### Lists
+
+- `slash bullet`, `slash bullet point` -> `- `
+- `slash numbered point` -> `1. `
+
+### Punctuation
+
+- `slash question mark` -> `?`
+- `slash exclamation mark` -> `!`
+- `slash comma` -> `,`
+- `slash colon` -> `:`
+- `slash semicolon` -> `;`
+- `slash dot`, `slash period` -> `.`
+
+### Quotes
+
+- `slash quote`, `slash double quote` -> `"`
+- `slash single quote`, `slash apostrophe` -> `'`
+
+### Brackets
+
+- `slash open paren` / `slash close paren` -> `(` / `)`
+- `slash open parenthesis` / `slash close parenthesis` -> `(` / `)`
+- `slash open bracket` / `slash close bracket` -> `[` / `]`
+- `slash open square bracket` / `slash close square bracket` -> `[` / `]`
+- `slash open brace` / `slash close brace` -> `{` / `}`
+- `slash open curly brace` / `slash close curly brace` -> `{` / `}`
+- `slash open angle bracket` / `slash close angle bracket` -> `<` / `>`
+
+### Operators and symbols
+
+- `slash equals` -> `=`
+- `slash plus` -> `+`
+- `slash minus`, `slash dash` -> `-`
+- `slash underscore` -> `_`
+- `slash star`, `slash asterisk` -> `*`
+- `slash slash` -> `/`
+- `slash backslash` -> `\`
+- `slash greater than` -> `>`
+- `slash less than` -> `<`
+- `slash ampersand` -> `&`
+- `slash pipe` -> `|`
+- `slash percent` -> `%`
+- `slash dollar sign` -> `$`
+- `slash hash` -> `#`
+- `slash at sign` -> `@`
+- `slash arrow` -> `->`
+- `slash fat arrow` -> `=>`
+
+### Markdown helpers
+
+- `slash code block` -> ``````
+- `slash markdown heading` -> `# `
+
 ## API
 
 - `GET /health`

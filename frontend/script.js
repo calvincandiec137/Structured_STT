@@ -5,9 +5,8 @@ const TRANSCRIBE_URL = "http://localhost:8000/transcribe";
 const DEBUG = true;
 const INITIAL_CODE = `# Voice Programmer Dictation Demo
 # Speak commands like:
-# slash newline
+# slash new line
 # slash indent
-# slash open paren
 `;
 
 function loadMonaco() {
