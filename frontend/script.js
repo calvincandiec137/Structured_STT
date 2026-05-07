@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "https://esm.sh/react@18.3.1";
 import { createRoot } from "https://esm.sh/react-dom@18.3.1/client";
 
-const TRANSCRIBE_URL = "http://localhost:8000/transcribe";
+const TRANSCRIBE_URL = "https://structured-stt.onrender.com";
 const DEBUG = true;
 const INITIAL_CODE = `# Voice Programmer Dictation Demo
 # Speak commands like:

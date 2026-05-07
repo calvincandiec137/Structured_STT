@@ -8,7 +8,11 @@ from fastapi import FastAPI, File, HTTPException, UploadFile, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from groq import APIConnectionError, APIStatusError, Groq
 
-from parser import parse_transcript
+try:
+    from parser import parse_transcript
+except ModuleNotFoundError:
+    # Render often runs from repo root via `uvicorn backend.main:app`.
+    from backend.parser import parse_transcript
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -159,5 +163,6 @@ async def transcribe(file: UploadFile = File(...)) -> dict[str, Any]:
 if __name__ == "__main__":
     import uvicorn
 
-    logger.info("Starting backend with keys=%s", len(API_KEYS))
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    port = int(os.getenv("PORT", "8000"))
+    logger.info("Starting backend with keys=%s port=%s", len(API_KEYS), port)
+    uvicorn.run(app, host="0.0.0.0", port=port, reload=False)
