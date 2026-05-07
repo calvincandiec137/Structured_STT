@@ -1,5 +1,7 @@
 # Voice Programmer Dictation
 
+Demo: https://youtu.be/xcankohTy64?si=CGpHwxpz3693OUJr
+
 Minimal prototype for structured voice typing.
 
 Record audio in the browser, send one complete file to FastAPI, transcribe with Groq Whisper, parse `slash` commands, and insert formatted text into Monaco.
