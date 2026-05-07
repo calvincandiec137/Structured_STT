@@ -1,17 +1,16 @@
-# Voice Programmer Dictation Prototype
+# Voice Programmer Dictation
 
-A focused demo for structured voice dictation aimed at programmers. It records a full voice clip in the browser, sends one complete audio file to FastAPI, transcribes with Groq Whisper, parses `slash` commands, and inserts formatted output into Monaco Editor.
+Minimal prototype for structured voice typing.
 
-## What It Does
+Record audio in the browser, send one complete file to FastAPI, transcribe with Groq Whisper, parse `slash` commands, and insert formatted text into Monaco.
 
-- Records microphone audio in browser (push-to-talk)
-- Sends one complete audio file to backend via `POST /transcribe`
-- Transcribes with Groq Whisper API
-- Converts spoken commands like `slash newline` and `slash open paren`
-- Appends parsed output directly into Monaco editor
-- Shows transcript, status, and debug logs in UI
+## Stack
 
-## Folder Structure
+- Frontend: React + Vite + Monaco + CSS
+- Backend: FastAPI (Python)
+- STT: Groq Whisper API
+
+## Project Structure
 
 ```text
 backend/
@@ -34,15 +33,15 @@ README.md
 ```bash
 cd backend
 python -m venv .venv
-# Windows PowerShell
+# PowerShell
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 ```
 
-Set API keys in `backend/.env`:
+Create `backend/.env`:
 
 ```env
-GROQ_API_KEYS=your_key_1,your_key_2,your_key_3
+GROQ_API_KEYS=key1,key2,key3
 ```
 
 Run backend:
@@ -51,61 +50,29 @@ Run backend:
 python main.py
 ```
 
-Backend runs at `http://localhost:8000` with endpoint `POST /transcribe`.
-
 ### 2. Frontend
-
-Open a second terminal:
 
 ```bash
 cd frontend
 npx vite
 ```
 
-Open the URL shown by Vite (usually `http://localhost:5173`).
+Open: `http://127.0.0.1:5173`
 
-## How to Use
+## How To Use
 
 1. Click **Start Recording**
-2. Speak commands
+2. Speak text and `slash` commands
 3. Click **Stop Recording**
-4. App receives transcript + parsed text from backend
-5. Parsed output is inserted into editor
+4. Transcript is parsed and inserted into editor
 
-## Example Commands
+## API
 
-- `slash newline`
-- `slash double newline`
-- `slash indent`
-- `slash tab`
-- `slash bullet`
-- `slash numbered point`
-- `slash open paren` / `slash close paren`
-- `slash open brace` / `slash close brace`
-- `slash open bracket` / `slash close bracket`
-- `slash colon`
-- `slash comma`
-- `slash dot`
-- `slash equals`
-- `slash question mark`
-- `slash exclamation mark`
-- `slash semicolon`
-- `slash quote`
-- `slash single quote`
-- `slash slash`
-- `slash backslash`
-- `slash dash`
-- `slash underscore`
-- `slash plus`
-- `slash star`
+- `GET /health`
+- `POST /transcribe` (multipart form with `file`)
 
-## Error Handling Included
+## Notes
 
-- Microphone permission failure
-- Missing API keys
-- API request failures
-- Empty audio uploads
-
-## Screenshots
-
-- Add screenshots here after running the demo.
+- English only
+- Insertion-only prototype (no cursor movement/editing)
+- API key rotation is enabled in backend
