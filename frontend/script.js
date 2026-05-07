@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "https://esm.sh/react@18.3.1";
 import { createRoot } from "https://esm.sh/react-dom@18.3.1/client";
 
-const WS_URL = "ws://localhost:8000/ws";
+const TRANSCRIBE_URL = "http://localhost:8000/transcribe";
+const DEBUG = true;
 const INITIAL_CODE = `# Voice Programmer Dictation Demo
 # Speak commands like:
 # slash newline
@@ -36,21 +37,25 @@ function loadMonaco() {
 function App() {
   const editorMountRef = useRef(null);
   const editorRef = useRef(null);
-  const socketRef = useRef(null);
   const recorderRef = useRef(null);
   const streamRef = useRef(null);
-  const lastTranscriptRef = useRef("");
+  const chunksRef = useRef([]);
 
   const [transcript, setTranscript] = useState("Waiting for speech...");
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
+  const [debugLines, setDebugLines] = useState([]);
 
-  const isRecording = status === "recording";
+  function logDebug(message) {
+    if (!DEBUG) return;
+    const line = `${new Date().toLocaleTimeString()} | ${message}`;
+    console.log(`[voice-debug] ${line}`);
+    setDebugLines((prev) => [...prev.slice(-39), line]);
+  }
 
   const statusLabel = useMemo(() => {
     if (status === "recording") return "Recording";
-    if (status === "connecting") return "Connecting";
-    if (status === "connected") return "Connected";
+    if (status === "transcribing") return "Transcribing";
     if (status === "error") return "Error";
     return "Idle";
   }, [status]);
@@ -92,7 +97,7 @@ function App() {
 
     return () => {
       disposed = true;
-      stopRecording();
+      cleanupRecorder();
       editorRef.current?.dispose();
       editorRef.current = null;
     };
@@ -135,96 +140,15 @@ function App() {
     editor.revealLine(model.getLineCount());
   }
 
-  async function startRecording() {
-    if (isRecording || status === "connecting") return;
-
-    setError("");
-    setStatus("connecting");
-    setTranscript("Listening...");
-    lastTranscriptRef.current = "";
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-
-      const socket = new WebSocket(WS_URL);
-      socket.binaryType = "arraybuffer";
-
-      socket.onopen = () => {
-        setStatus("connected");
-      };
-
-      socket.onerror = () => {
-        setStatus("error");
-        setError("WebSocket connection failed.");
-      };
-
-      socket.onclose = () => {
-        if (status !== "idle") {
-          setStatus((prev) => (prev === "error" ? "error" : "idle"));
-        }
-      };
-
-      socket.onmessage = (event) => {
-        try {
-          const payload = JSON.parse(event.data);
-
-          if (payload.type === "error") {
-            setError(payload.message || "Unknown backend error.");
-            setStatus("error");
-            return;
-          }
-
-          if (payload.type === "status") {
-            if (payload.message === "connected") {
-              setStatus("recording");
-            }
-            return;
-          }
-
-          if (payload.type === "transcript") {
-            setTranscript(payload.raw || "");
-
-            const parsed = payload.parsed || "";
-            if (parsed && parsed !== lastTranscriptRef.current) {
-              appendToEditor(parsed);
-              lastTranscriptRef.current = parsed;
-            }
-          }
-        } catch {
-          setError("Invalid server message.");
-          setStatus("error");
-        }
-      };
-
-      socketRef.current = socket;
-
-      const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
-      recorderRef.current = recorder;
-
-      recorder.ondataavailable = async (event) => {
-        if (!event.data || event.data.size === 0) return;
-        if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) return;
-
-        const bytes = await event.data.arrayBuffer();
-        socketRef.current.send(bytes);
-      };
-
-      recorder.onerror = () => {
-        setError("Audio recording failed.");
-        setStatus("error");
-      };
-
-      recorder.start(900);
-    } catch (err) {
-      const message = err?.message || "Microphone permission denied.";
-      setError(message);
-      setStatus("error");
-      cleanupStream();
+  function pickRecorderMimeType() {
+    const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/ogg"];
+    for (const type of candidates) {
+      if (MediaRecorder.isTypeSupported(type)) return type;
     }
+    return "";
   }
 
-  function cleanupStream() {
+  function cleanupRecorder() {
     if (recorderRef.current && recorderRef.current.state !== "inactive") {
       recorderRef.current.stop();
     }
@@ -235,25 +159,119 @@ function App() {
     }
     streamRef.current = null;
 
-    if (socketRef.current) {
-      if (socketRef.current.readyState === WebSocket.OPEN) {
-        socketRef.current.send("stop");
+    chunksRef.current = [];
+  }
+
+  async function sendForTranscription(blob, mimeType) {
+    setStatus("transcribing");
+    logDebug(`upload begin bytes=${blob.size} mime=${mimeType || "unknown"}`);
+
+    const extension = mimeType.includes("ogg") ? "ogg" : "webm";
+    const file = new File([blob], `recording.${extension}`, { type: mimeType || "audio/webm" });
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const response = await fetch(TRANSCRIBE_URL, {
+        method: "POST",
+        body: formData,
+      });
+
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        const detail = payload?.detail || `HTTP ${response.status}`;
+        throw new Error(detail);
       }
-      socketRef.current.close();
+
+      const raw = payload.raw || "";
+      const parsed = payload.parsed || "";
+      logDebug(`upload done raw_len=${raw.length} parsed_len=${parsed.length}`);
+
+      setTranscript(raw || "(no speech detected)");
+      if (parsed) {
+        appendToEditor(parsed);
+      }
+      setStatus("idle");
+    } catch (err) {
+      const message = err?.message || "Transcription request failed.";
+      logDebug(`upload failed error=${message}`);
+      setError(message);
+      setStatus("error");
     }
-    socketRef.current = null;
+  }
+
+  async function startRecording() {
+    if (status === "recording" || status === "transcribing") return;
+
+    setError("");
+    setTranscript("Listening...");
+    chunksRef.current = [];
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+
+      const mimeType = pickRecorderMimeType();
+      const recorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
+
+      recorderRef.current = recorder;
+
+      recorder.ondataavailable = (event) => {
+        if (!event.data || event.data.size === 0) return;
+        chunksRef.current.push(event.data);
+        logDebug(`chunk captured size=${event.data.size} type=${event.data.type || mimeType || "unknown"}`);
+      };
+
+      recorder.onerror = () => {
+        logDebug("recorder error");
+        setError("Audio recording failed.");
+        setStatus("error");
+      };
+
+      recorder.onstop = async () => {
+        logDebug(`recorder stopped chunks=${chunksRef.current.length}`);
+        const recordedBlob = new Blob(chunksRef.current, { type: recorder.mimeType || mimeType || "audio/webm" });
+        chunksRef.current = [];
+
+        stream.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+
+        if (!recordedBlob.size) {
+          setError("No audio captured. Please try again.");
+          setStatus("error");
+          return;
+        }
+
+        await sendForTranscription(recordedBlob, recorder.mimeType || mimeType || "audio/webm");
+      };
+
+      recorder.start();
+      setStatus("recording");
+      logDebug(`recorder started mime=${recorder.mimeType || mimeType || "browser-default"}`);
+    } catch (err) {
+      const message = err?.message || "Microphone permission denied.";
+      logDebug(`start failed error=${message}`);
+      setError(message);
+      setStatus("error");
+      cleanupRecorder();
+    }
   }
 
   function stopRecording() {
-    cleanupStream();
-    setStatus("idle");
+    if (!recorderRef.current) return;
+    if (recorderRef.current.state === "inactive") return;
+    logDebug("stop requested");
+    recorderRef.current.stop();
   }
 
   return (
     React.createElement("div", { className: "page" },
       React.createElement("header", { className: "top" },
         React.createElement("h1", null, "Voice Programmer Dictation"),
-        React.createElement("p", null, "Speak structure-first commands and watch code format itself in real time.")
+        React.createElement("p", null, "Press start, speak commands, then stop to transcribe and insert structured text.")
       ),
       React.createElement("main", { className: "workspace" },
         React.createElement("section", { className: "panel editor-panel" },
@@ -261,15 +279,25 @@ function App() {
           React.createElement("div", { ref: editorMountRef, className: "editor" })
         ),
         React.createElement("section", { className: "panel transcript-panel" },
-          React.createElement("div", { className: "panel-title" }, "Live Transcript"),
+          React.createElement("div", { className: "panel-title" }, "Transcript"),
           React.createElement("pre", { className: "transcript" }, transcript),
+          React.createElement("div", { className: "panel-title" }, "Debug Log"),
+          React.createElement("pre", { className: "transcript" }, debugLines.join("\n")),
           error ? React.createElement("div", { className: "error" }, error) : null
         )
       ),
       React.createElement("footer", { className: "controls" },
         React.createElement("div", { className: "buttons" },
-          React.createElement("button", { className: "start", disabled: isRecording || status === "connecting", onClick: startRecording }, "Start Recording"),
-          React.createElement("button", { className: "stop", disabled: !isRecording && status !== "connected", onClick: stopRecording }, "Stop Recording")
+          React.createElement(
+            "button",
+            { className: "start", disabled: status === "recording" || status === "transcribing", onClick: startRecording },
+            "Start Recording"
+          ),
+          React.createElement(
+            "button",
+            { className: "stop", disabled: status !== "recording", onClick: stopRecording },
+            "Stop Recording"
+          )
         ),
         React.createElement("div", { className: `status ${status}` },
           React.createElement("span", { className: "dot" }),

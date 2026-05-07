@@ -1,34 +1,95 @@
 import re
 
 COMMAND_MAP = {
-    "slash double newline": "\n\n",
-    "slash newline": "\n",
+    # line breaks
+    "slash new line": "\n",
+    "slash next line": "\n",
+    "slash line break": "\n",
+
+    "slash double new line": "\n\n",
+    "slash new paragraph": "\n\n",
+
+    # spacing
     "slash indent": "    ",
     "slash tab": "\t",
-    "slash bullet": "-",
-    "slash numbered point": "1.",
-    "slash open paren": "(",
-    "slash close paren": ")",
-    "slash open brace": "{",
-    "slash close brace": "}",
-    "slash open bracket": "[",
-    "slash close bracket": "]",
-    "slash colon": ":",
-    "slash comma": ",",
-    "slash dot": ".",
-    "slash equals": "=",
+    "slash space": " ",
+
+    # lists
+    "slash bullet": "- ",
+    "slash bullet point": "- ",
+    "slash numbered point": "1. ",
+
+    # punctuation
     "slash question mark": "?",
     "slash exclamation mark": "!",
+    "slash comma": ",",
+    "slash colon": ":",
     "slash semicolon": ";",
+    "slash dot": ".",
+    "slash period": ".",
+
+    # quotes
     "slash quote": '"',
+    "slash double quote": '"',
     "slash single quote": "'",
-    "slash space": " ",
-    "slash slash": "/",
-    "slash backslash": "\\",
+    "slash apostrophe": "'",
+
+    # brackets
+    "slash open paren": "(",
+    "slash close paren": ")",
+
+    "slash open parenthesis": "(",
+    "slash close parenthesis": ")",
+
+    "slash open bracket": "[",
+    "slash close bracket": "]",
+
+    "slash open square bracket": "[",
+    "slash close square bracket": "]",
+
+    "slash open brace": "{",
+    "slash close brace": "}",
+
+    "slash open curly brace": "{",
+    "slash close curly brace": "}",
+
+    # operators
+    "slash equals": "=",
+    "slash plus": "+",
+    "slash minus": "-",
     "slash dash": "-",
     "slash underscore": "_",
-    "slash plus": "+",
     "slash star": "*",
+    "slash asterisk": "*",
+    "slash slash": "/",
+    "slash backslash": "\\",
+
+    # comparisons
+    "slash greater than": ">",
+    "slash less than": "<",
+
+    # programming symbols
+    "slash ampersand": "&",
+    "slash pipe": "|",
+    "slash percent": "%",
+    "slash dollar sign": "$",
+    "slash hash": "#",
+    "slash at sign": "@",
+
+    # angle brackets
+    "slash open angle bracket": "<",
+    "slash close angle bracket": ">",
+
+    # arrows
+    "slash arrow": "->",
+    "slash fat arrow": "=>",
+
+    # markdown helpers
+    "slash code block": "```",
+    "slash markdown heading": "# ",
+
+    # misc
+    "slash new tab": "\t",
 }
 
 SORTED_COMMANDS = sorted(COMMAND_MAP.keys(), key=lambda item: len(item.split()), reverse=True)

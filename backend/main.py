@@ -1,16 +1,18 @@
 import asyncio
+import logging
 import os
-from tempfile import NamedTemporaryFile
+from typing import Any
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, File, HTTPException, UploadFile, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from groq import APIConnectionError, APIStatusError, Groq
-from starlette.websockets import WebSocketState
 
 from parser import parse_transcript
 
 load_dotenv()
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logger = logging.getLogger("voice-dictation-backend")
 
 app = FastAPI(title="Voice Programmer Dictation")
 app.add_middleware(
@@ -54,42 +56,54 @@ def _is_rate_limit_error(error: Exception) -> bool:
     return "rate limit" in message or "429" in message
 
 
-async def transcribe_chunk(audio_bytes: bytes) -> str:
+async def transcribe_file(audio_bytes: bytes, filename: str, content_type: str) -> str:
     if not API_KEYS or rotator is None:
         raise RuntimeError("Missing GROQ_API_KEYS in backend/.env")
 
+    if not audio_bytes:
+        return ""
+
     last_error: Exception | None = None
 
-    for _ in range(len(API_KEYS)):
-        _, api_key = await rotator.next_key()
+    for attempt in range(len(API_KEYS)):
+        key_index, api_key = await rotator.next_key()
         client = Groq(api_key=api_key)
 
         try:
-            with NamedTemporaryFile(suffix=".webm", delete=True) as temp:
-                temp.write(audio_bytes)
-                temp.flush()
-                with open(temp.name, "rb") as file_obj:
-                    response = client.audio.transcriptions.create(
-                        model="whisper-large-v3",
-                        file=file_obj,
-                        language="en",
-                        response_format="json",
-                        temperature=0,
-                    )
+            logger.info(
+                "Transcription attempt=%s key_index=%s bytes=%s filename=%s content_type=%s",
+                attempt + 1,
+                key_index,
+                len(audio_bytes),
+                filename,
+                content_type,
+            )
+
+            response = client.audio.transcriptions.create(
+                model="whisper-large-v3",
+                file=(filename, audio_bytes, content_type),
+                language="en",
+                response_format="json",
+                temperature=0,
+            )
 
             text = getattr(response, "text", "")
+            logger.info("Transcription success text_len=%s", len(text or ""))
             return text.strip() if text else ""
 
         except APIConnectionError as error:
             last_error = error
+            logger.warning("APIConnectionError key_index=%s error=%s", key_index, error)
             continue
         except APIStatusError as error:
             last_error = error
+            logger.warning("APIStatusError key_index=%s status=%s error=%s", key_index, error.status_code, error)
             if _is_rate_limit_error(error):
                 continue
             raise
         except Exception as error:
             last_error = error
+            logger.warning("Transcription error key_index=%s error=%s", key_index, error)
             if _is_rate_limit_error(error):
                 continue
             raise
@@ -106,66 +120,44 @@ async def health() -> dict[str, str]:
 
 
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket) -> None:
+async def legacy_ws(websocket: WebSocket) -> None:
     await websocket.accept()
+    await websocket.send_json(
+        {
+            "type": "error",
+            "message": "WebSocket dictation is deprecated. Use POST /transcribe flow (Start -> Stop).",
+        }
+    )
+    await websocket.close(code=1000)
 
+
+@app.post("/transcribe")
+async def transcribe(file: UploadFile = File(...)) -> dict[str, Any]:
     if not API_KEYS:
-        await websocket.send_json({"type": "error", "message": "Missing GROQ_API_KEYS in backend/.env"})
-        await websocket.close(code=1011)
-        return
+        raise HTTPException(status_code=500, detail="Missing GROQ_API_KEYS in backend/.env")
 
-    await websocket.send_json({"type": "status", "message": "connected"})
+    audio_bytes = await file.read()
+    if not audio_bytes:
+        raise HTTPException(status_code=400, detail="Empty audio file")
+
+    filename = file.filename or "recording.webm"
+    content_type = file.content_type or "audio/webm"
 
     try:
-        while True:
-            packet = await websocket.receive()
-            message_type = packet.get("type")
+        raw = await transcribe_file(audio_bytes, filename, content_type)
+    except Exception as error:
+        logger.exception("Transcription failed")
+        raise HTTPException(status_code=500, detail=f"Transcription failed: {error}") from error
 
-            if message_type == "websocket.disconnect":
-                break
-
-            if "bytes" in packet and packet["bytes"]:
-                audio_bytes = packet["bytes"]
-                try:
-                    transcript = await transcribe_chunk(audio_bytes)
-                except Exception as error:
-                    await websocket.send_json({"type": "error", "message": f"Transcription failed: {error}"})
-                    continue
-
-                if not transcript:
-                    continue
-
-                parsed = parse_transcript(transcript)
-                await websocket.send_json(
-                    {
-                        "type": "transcript",
-                        "raw": transcript,
-                        "parsed": parsed,
-                    }
-                )
-
-            elif "text" in packet and packet["text"]:
-                text = packet["text"].strip().lower()
-                if text == "stop":
-                    await websocket.send_json({"type": "status", "message": "stopping"})
-                    break
-
-    except WebSocketDisconnect:
-        return
-    except RuntimeError as error:
-        # Starlette can raise RuntimeError when disconnect is already consumed.
-        if "disconnect message has been received" in str(error).lower():
-            return
-        raise
-    finally:
-        try:
-            if websocket.application_state == WebSocketState.CONNECTED:
-                await websocket.close()
-        except RuntimeError:
-            pass
+    parsed = parse_transcript(raw)
+    return {
+        "raw": raw,
+        "parsed": parsed,
+    }
 
 
 if __name__ == "__main__":
     import uvicorn
 
+    logger.info("Starting backend with keys=%s", len(API_KEYS))
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
